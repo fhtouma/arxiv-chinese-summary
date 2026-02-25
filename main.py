@@ -48,9 +48,13 @@ def fetch_daily_papers():
     return list(papers_dict.values())
 
 def summarize_with_gemini(papers, api_key):
-    """调用 Gemini 1.5 Pro 进行总结"""
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-pro')
+    """调用最新的 Gemini 模型进行总结"""
+    # 初始化新版客户端
+    client = genai.Client(api_key=api_key)
+    
+    # 填入你在 AI Studio 中查到的最新可用 Pro 模型，例如 'gemini-2.5-pro'
+    # 如果找不到 1.5，大概率是因为命名规范更新了
+    MODEL_ID = 'gemini-2.5-pro' 
     
     prompt = """你是一位顶尖的天体物理学专家。请帮我总结以下来自arXiv (astro-ph.CO/GA) 的最新论文：
 1. 按研究子领域分类整理。
@@ -63,7 +67,11 @@ def summarize_with_gemini(papers, api_key):
         prompt += f"作者: {', '.join(paper['authors'][:3])} 等\n摘要: {paper['abstract']}\n"
     
     try:
-        response = model.generate_content(prompt)
+        # 新版 SDK 的调用方法
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt,
+        )
         return response.text
     except Exception as e:
         print(f"Gemini API调用失败: {e}")
