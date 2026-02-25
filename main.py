@@ -90,7 +90,7 @@ Abstract: {paper['abstract']}
         except Exception as e:
             error_msg = str(e).lower()
             # 如果是 429 限流或资源耗尽错误
-            if "429" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
+            if "429" in error_msg or "503" in error_msg or "500" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
                 if attempt < max_retries - 1:
                     print(f"    ⚠️ 触发 API 限流 (429)，暂停 60 秒后进行第 {attempt + 2} 次重试...")
                     time.sleep(60) # 强制冷却 1 分钟
@@ -204,10 +204,10 @@ def main():
         print("今日无新论文。")
         return
         
-    print(f"抓取到 {len(papers)} 篇论文，开始逐篇深度总结（预计耗时 {len(papers) * 5 // 60 + 1} 分钟）...")
+    print(f"抓取到 {len(papers)} 篇论文，开始逐篇深度总结（预计耗时 {len(papers) * 10 // 60 + 1} 分钟）...")
     
     client = genai.Client(api_key=api_key)
-    MODEL_ID = 'gemini-3-flash-preview' # 依然推荐使用 Flash 兼顾速度和免费额度
+    MODEL_ID = 'gemini-2.5-flash' # 依然推荐使用 Flash 兼顾速度和免费额度
     
     detailed_summaries = []
     today_str = datetime.now().strftime("%Y-%m-%d")
