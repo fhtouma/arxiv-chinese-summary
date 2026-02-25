@@ -57,7 +57,7 @@ def summarize_with_gemini(papers, api_key):
     
     # 请根据你在 Google AI Studio 中查到的可用模型名称进行替换
     # 如果可用列表里有 gemini-2.5-pro，就用它；如果有 gemini-1.5-pro 也可以换回去
-    MODEL_ID = 'gemini-3-pro-preview'
+    MODEL_ID = 'gemini-3-flash-preview'
     
     prompt = """你是一位顶尖的天体物理学专家。请帮我总结以下来自arXiv (astro-ph.CO/GA) 的最新论文：
 1. 按研究子领域分类整理。
