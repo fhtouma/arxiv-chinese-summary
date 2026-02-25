@@ -207,7 +207,7 @@ def main():
     print(f"抓取到 {len(papers)} 篇论文，开始逐篇深度总结（预计耗时 {len(papers) * 5 // 60 + 1} 分钟）...")
     
     client = genai.Client(api_key=api_key)
-    MODEL_ID = 'gemini-2.5-flash' # 依然推荐使用 Flash 兼顾速度和免费额度
+    MODEL_ID = 'gemini-3-flash-preview' # 依然推荐使用 Flash 兼顾速度和免费额度
     
     detailed_summaries = []
     today_str = datetime.now().strftime("%Y-%m-%d")
