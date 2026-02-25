@@ -52,37 +52,54 @@ def fetch_daily_papers():
     return list(papers_dict.values())
 
 def summarize_single_paper(paper, client, model_id):
-    """单独翻译并总结一篇论文（Map 阶段）"""
-    prompt = f"""你是一位天体物理学专家。请阅读以下 arXiv 论文摘要，翻译，并用中文进行结构化总结。
+    """单独翻译并总结一篇论文（Map 阶段），带有重试机制"""
     
-要求：
-1. 保留原始英文标题（在中文前列出），第一作者名称和单位。
-2. 提炼出核心问题、主要方法、关键结论。
+    # 获取第一作者（如果列表不为空）
+    first_author = paper['authors'][0] if paper['authors'] else "Unknown"
+    
+    prompt = f"""你是一位天体物理学专家。请阅读以下 arXiv 论文摘要，并严格按照规定格式输出中文总结。
+    
+【强制要求】
+1. 必须完全遵循下方的【输出模板】，不要增加任何额外的寒暄、标号（如1. 2. 3.）或多余的换行。
+2. 每一个条目必须以星号加粗开头，例如：* **核心问题：**
 3. 语言简练，专业术语翻译准确。
 
-论文信息：
+【论文信息】
 ID: {paper['arxiv_id']}
 Title: {paper['title']}
-Authors: {', '.join(paper['authors'][:3])} et al.
-Subjects: {paper['subjects']}
 Abstract: {paper['abstract']}
 
-请严格按照以下格式输出：
+【输出模板】（请严格原样输出以下结构）
 **[{paper['arxiv_id']}] {paper['title']}**
+* **第一作者：** {first_author}
 * **核心问题：** [用一句话概括]
 * **主要方法：** [使用的数据/仪器/模型]
 * **关键结论：** [核心发现或结果]
-* **摘要翻译：** [摘要原文逐字翻译]
+* **摘要翻译：** [摘要原文的准确完整逐字翻译]
 """
-    try:
-        response = client.models.generate_content(
-            model=model_id,
-            contents=prompt,
-        )
-        return response.text
-    except Exception as e:
-        print(f"  -> 论文 {paper['arxiv_id']} 总结失败: {e}")
-        return f"**[{paper['arxiv_id']}] {paper['title']}**\n* 总结生成失败，请参考原文。\n"
+    
+    # 工业级做法：添加自动重试机制 (最多重试 3 次)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=model_id,
+                contents=prompt,
+            )
+            return response.text
+        except Exception as e:
+            error_msg = str(e).lower()
+            # 如果是 429 限流或资源耗尽错误
+            if "429" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
+                if attempt < max_retries - 1:
+                    print(f"    ⚠️ 触发 API 限流 (429)，暂停 60 秒后进行第 {attempt + 2} 次重试...")
+                    time.sleep(60) # 强制冷却 1 分钟
+                else:
+                    return f"**[{paper['arxiv_id']}] {paper['title']}**\n* ❌ 总结失败：API 额度耗尽，请参考原文。\n"
+            else:
+                # 其他未知错误直接返回
+                print(f"    ❌ 论文 {paper['arxiv_id']} 总结发生未知错误: {e}")
+                return f"**[{paper['arxiv_id']}] {paper['title']}**\n* ❌ 总结失败：{e}\n"
 
 def generate_overall_summary(all_detailed_summaries, client, model_id):
     """基于所有单篇摘要，生成宏观分类与热点概览（Reduce 阶段）"""
@@ -197,7 +214,7 @@ def main():
     detailed_md = f"# arXiv astro-ph (CO & GA) 详细论文翻译 - {today_str}\n\n"
     detailed_md += f"共收录 {len(papers)} 篇最新论文。\n\n---\n\n"
     
-    # 第一阶段：Map - 逐篇处理
+# 第一阶段：Map - 逐篇处理
     for i, paper in enumerate(papers):
         print(f"[{i+1}/{len(papers)}] 正在处理: {paper['arxiv_id']}")
         
@@ -207,9 +224,9 @@ def main():
         # 将单篇结果追加到附件文本中
         detailed_md += single_summary + "\n\n---\n\n"
         
-        # 防封锁休眠：如果是最后一篇就不需要等了
+        # 防封锁休眠：放慢速度，8秒一次，确保绝对低于 10 RPM 限制
         if i < len(papers) - 1:
-            time.sleep(5) 
+            time.sleep(8)
             
     # 第二阶段：Reduce - 宏观汇总
     print("\n所有单篇处理完毕，正在生成宏观趋势概览...")
