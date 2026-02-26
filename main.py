@@ -245,4 +245,4 @@ def main():
         send_email_with_attachment(overall_summary, detailed_md, sender_email, sender_password, recipients, smtp_server)
 
 if __name__ == "__main__":
-    main()main()
+    main()
