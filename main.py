@@ -107,8 +107,8 @@ Abstract: {paper['abstract']}
 * **摘要翻译：** [摘要原文的准确完整逐字翻译]
 """
     
-    # 工业级做法：添加自动重试机制 (最多重试 3 次)
-    max_retries = 3
+    # 工业级做法：添加自动重试机制 (最多重试 5 次)
+    max_retries = 5
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
@@ -121,8 +121,8 @@ Abstract: {paper['abstract']}
             # 如果是 429 限流或资源耗尽错误
             if "429" in error_msg or "503" in error_msg or "500" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
                 if attempt < max_retries - 1:
-                    print(f"    ⚠️ 触发 API 限流 (429)，暂停 60 秒后进行第 {attempt + 2} 次重试...")
-                    time.sleep(60) # 强制冷却 1 分钟
+                    print(f"    ⚠️ 触发 API 限流 (429)，暂停 90 秒后进行第 {attempt + 2} 次重试...")
+                    time.sleep(90) # 强制冷却 1.5 分钟
                 else:
                     return f"**[{paper['arxiv_id']}] {paper['title']}**\n* ❌ 总结失败：API 额度耗尽，请参考原文。\n"
             else:
@@ -155,8 +155,8 @@ def generate_overall_summary(all_detailed_summaries, client, model_id):
             error_msg = str(e).lower()
             if "429" in error_msg or "503" in error_msg or "500" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
                 if attempt < max_retries - 1:
-                    print(f"⚠️ 宏观总结 API 限流或拥堵，暂停 60 秒后重试 ({attempt + 1}/{max_retries})...")
-                    time.sleep(60)
+                    print(f"⚠️ 宏观总结 API 限流或拥堵，暂停 90 秒后重试 ({attempt + 1}/{max_retries})...")
+                    time.sleep(90)
                 else:
                     return "❌ 宏观总结生成失败：API 额度耗尽或持续拥堵。请查阅附件中的详细摘要。"
             else:
@@ -238,10 +238,10 @@ def main():
         return
         
     print(f"成功筛选出 {len(papers)} 篇纯新提交论文 (New submissions)！")
-    print(f"开始逐篇深度总结，基础间隔设为 60 秒，预计耗时 {len(papers)} 分钟...")
+    print(f"开始逐篇深度总结，基础间隔设为 90 秒，预计耗时 {len(papers)*1.5} 分钟...")
     
     client = genai.Client(api_key=api_key)
-    MODEL_ID = 'gemini-3-flash-preview'
+    MODEL_ID = 'gemini-2.5-flash'
     
     detailed_summaries = []
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -256,10 +256,10 @@ def main():
         
         detailed_md += single_summary + "\n\n---\n\n"
         
-        # 【升级】所有正常请求之间也强制休眠 60 秒，彻底确保安全！
+        # 【升级】所有正常请求之间也强制休眠 90 秒，彻底确保安全！
         if i < len(papers) - 1:
-            print("    ⏳ 等待 60 秒以防触发 API 速率限制...")
-            time.sleep(60) 
+            print("    ⏳ 等待 90 秒以防触发 API 速率限制...")
+            time.sleep(90) 
             
     print("\n所有单篇处理完毕，正在生成宏观趋势概览...")
     all_text_for_reduce = "\n".join(detailed_summaries)
