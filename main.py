@@ -24,28 +24,49 @@ def fetch_daily_papers():
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 【升级】精准定位到包含 "New submissions" 的 h3 标签
-            h3_new = soup.find(lambda tag: tag.name == 'h3' and 'New submissions' in tag.text)
-            if not h3_new:
-                print(f"  -> 未找到 {category} 的 New submissions 部分，可能今日无新提交。")
+            # 1. 寻找包含 "new submissions" 的标题标签（涵盖 h1-h5，且忽略大小写）
+            header = soup.find(lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4', 'h5'] and 'new submissions' in tag.text.lower())
+            
+            if not header:
+                print(f"  -> ❌ 未找到 {category} 的 'New submissions' 标题。可能今日该分类无新提交。")
                 continue
             
-            # 【升级】只抓取跟在这个 h3 紧挨着的 dl 列表
-            dl = h3_new.find_next_sibling('dl')
+            # 2. find_next 向下搜索第一个 dl 标签，无视层级嵌套，比 find_next_sibling 稳 100 倍
+            dl = header.find_next('dl')
             if not dl:
+                print(f"  -> ❌ 在 {category} 的标题后未找到对应的 dl 列表。")
                 continue
             
-            dt_items = dl.find_all('dt', recursive=False)
-            dd_items = dl.find_all('dd', recursive=False)
+            # 3. 提取 dt 和 dd（去掉 recursive=False 限制，防止 arXiv 内部的 div 嵌套阻挡）
+            dt_items = dl.find_all('dt')
+            dd_items = dl.find_all('dd')
+            
+            print(f"  -> ✅ 成功定位！在 {category} 中筛选出 {len(dt_items)} 篇纯新提交论文。")
             
             for dt, dd in zip(dt_items, dd_items):
-                arxiv_id = dt.find('a', title="Abstract")['href'].replace('/abs/', '')
-                if arxiv_id in papers_dict: continue
+                # 安全提取 arXiv ID
+                a_tag = dt.find('a', title="Abstract")
+                if not a_tag:
+                    continue
+                arxiv_id = a_tag['href'].replace('/abs/', '')
                 
-                title = dd.find('div', class_='list-title').text.replace('Title:', '').strip()
+                # 全局去重：如果 GA 和 CO 有重复论文，只保留第一次抓取到的
+                if arxiv_id in papers_dict: 
+                    continue
+                
+                # 提取标题
+                title_div = dd.find('div', class_='list-title')
+                title = title_div.text.replace('Title:', '').strip() if title_div else "No Title"
+                
+                # 提取作者
                 authors_div = dd.find('div', class_='list-authors')
-                authors = [a.text for a in authors_div.find_all('a')]
-                abstract = dd.find('p', class_='mathjax').text.strip()
+                authors = [a.text for a in authors_div.find_all('a')] if authors_div else []
+                
+                # 提取摘要
+                mathjax_p = dd.find('p', class_='mathjax')
+                abstract = mathjax_p.text.strip() if mathjax_p else "No Abstract"
+                
+                # 提取主题
                 subjects_div = dd.find('div', class_='list-subjects')
                 subjects = subjects_div.text.replace('Subjects:', '').strip() if subjects_div else ""
                 
@@ -60,7 +81,7 @@ def fetch_daily_papers():
             print(f"抓取 {category} 时出错: {e}")
             
     return list(papers_dict.values())
-
+    
 def summarize_single_paper(paper, client, model_id):
     """单独翻译并总结一篇论文，带错误重试机制（成功则不重试）"""
     first_author = paper['authors'][0] if paper['authors'] else "Unknown"
