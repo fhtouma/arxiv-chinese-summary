@@ -81,14 +81,16 @@ def fetch_daily_papers():
     return list(papers_dict.values())
     
 def summarize_single_paper(paper, client, model_id):
-    """单独翻译并总结一篇论文，带错误重试机制（成功则不重试）"""
+    """单独翻译并总结一篇论文（Map 阶段），带有重试机制"""
+    
+    # 获取第一作者（如果列表不为空）
     first_author = paper['authors'][0] if paper['authors'] else "Unknown"
     
     prompt = f"""你是一位天体物理学专家。请阅读以下 arXiv 论文摘要，并严格按照规定格式输出中文总结。
     
 【强制要求】
-1. 必须完全遵循下方的【输出模板】，不要增加任何额外的寒暄、标号或多余的换行。
-2. 每一个条目必须以星号加粗开头。
+1. 必须完全遵循下方的【输出模板】，不要增加任何额外的寒暄、标号（如1. 2. 3.）或多余的换行。
+2. 每一个条目必须以星号加粗开头，例如：* **核心问题：**
 3. 语言简练，专业术语翻译准确。
 
 【论文信息】
@@ -104,24 +106,28 @@ Abstract: {paper['abstract']}
 * **关键结论：** [核心发现或结果]
 * **摘要翻译：** [摘要原文的准确完整逐字翻译]
 """
-    max_retries = 5
+    
+    # 工业级做法：添加自动重试机制 (最多重试 3 次)
+    max_retries = 3
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
                 model=model_id,
                 contents=prompt,
             )
-            # 如果成功，直接 return 并跳出整个循环
-            return response.text 
+            return response.text
         except Exception as e:
             error_msg = str(e).lower()
+            # 如果是 429 限流或资源耗尽错误
             if "429" in error_msg or "503" in error_msg or "500" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
                 if attempt < max_retries - 1:
-                    print(f"    ⚠️ API 限流或拥堵 ({e.split()[0]})，暂停 60 秒后重试 ({attempt + 1}/{max_retries})...")
-                    time.sleep(60)
+                    print(f"    ⚠️ 触发 API 限流 (429)，暂停 60 秒后进行第 {attempt + 2} 次重试...")
+                    time.sleep(60) # 强制冷却 1 分钟
                 else:
-                    return f"**[{paper['arxiv_id']}] {paper['title']}**\n* ❌ 总结失败：API 额度耗尽或持续拥堵。\n"
+                    return f"**[{paper['arxiv_id']}] {paper['title']}**\n* ❌ 总结失败：API 额度耗尽，请参考原文。\n"
             else:
+                # 其他未知错误直接返回
+                print(f"    ❌ 论文 {paper['arxiv_id']} 总结发生未知错误: {e}")
                 return f"**[{paper['arxiv_id']}] {paper['title']}**\n* ❌ 总结失败：{e}\n"
 
 def generate_overall_summary(all_detailed_summaries, client, model_id):
@@ -235,7 +241,7 @@ def main():
     print(f"开始逐篇深度总结，基础间隔设为 60 秒，预计耗时 {len(papers)} 分钟...")
     
     client = genai.Client(api_key=api_key)
-    MODEL_ID = 'gemini-2.5-flash'
+    MODEL_ID = 'gemini-3-flash-preview'
     
     detailed_summaries = []
     today_str = datetime.now().strftime("%Y-%m-%d")
