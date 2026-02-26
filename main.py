@@ -11,8 +11,8 @@ import markdown
 from google import genai
 
 def fetch_daily_papers():
-    """抓取arXiv astro-ph.CO 和 astro-ph.GA 类别的最新论文并去重，仅限 New submissions"""
-    categories = ["astro-ph.CO", "astro-ph.GA"]
+    """抓取arXiv astro-ph.GA 和 astro-ph.CO 类别的最新论文并去重，仅限 New submissions"""
+    categories = ["astro-ph.GA", "astro-ph.CO"]
     papers_dict = {}
     
     for category in categories:
@@ -24,33 +24,30 @@ def fetch_daily_papers():
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 1. 寻找包含 "new submissions" 的标题标签（涵盖 h1-h5，且忽略大小写）
-            header = soup.find(lambda tag: tag.name in ['h1', 'h2', 'h3', 'h4', 'h5'] and 'new submissions' in tag.text.lower())
+            # 直接无视嵌套，提取网页上所有的 dt(论文ID) 和 dd(论文详情)
+            dt_items = soup.find_all('dt')
+            dd_items = soup.find_all('dd')
             
-            if not header:
-                print(f"  -> ❌ 未找到 {category} 的 'New submissions' 标题。可能今日该分类无新提交。")
-                continue
-            
-            # 2. find_next 向下搜索第一个 dl 标签，无视层级嵌套，比 find_next_sibling 稳 100 倍
-            dl = header.find_next('dl')
-            if not dl:
-                print(f"  -> ❌ 在 {category} 的标题后未找到对应的 dl 列表。")
-                continue
-            
-            # 3. 提取 dt 和 dd（去掉 recursive=False 限制，防止 arXiv 内部的 div 嵌套阻挡）
-            dt_items = dl.find_all('dt')
-            dd_items = dl.find_all('dd')
-            
-            print(f"  -> ✅ 成功定位！在 {category} 中筛选出 {len(dt_items)} 篇纯新提交论文。")
-            
+            new_count = 0
             for dt, dd in zip(dt_items, dd_items):
+                # 【终极防漏杀招】：向上寻找最近的标题标签
+                # 这样可以精准判断当前这篇论文属于 New, Cross-lists 还是 Replacements
+                section_header = dt.find_previous(['h1', 'h2', 'h3', 'h4', 'h5'])
+                
+                # 如果它头顶上最近的标题不是 "new submissions"，说明它是跨分类或旧版更新，直接跳过！
+                if not section_header or 'new submissions' not in section_header.text.lower():
+                    continue
+                
+                # 此时 100% 确定这是纯新提交的论文！
+                new_count += 1
+                
                 # 安全提取 arXiv ID
                 a_tag = dt.find('a', title="Abstract")
                 if not a_tag:
                     continue
                 arxiv_id = a_tag['href'].replace('/abs/', '')
                 
-                # 全局去重：如果 GA 和 CO 有重复论文，只保留第一次抓取到的
+                # 全局去重：如果 GA 和 CO 抓到了同一篇，只保留一次
                 if arxiv_id in papers_dict: 
                     continue
                 
@@ -77,6 +74,7 @@ def fetch_daily_papers():
                     'abstract': abstract,
                     'subjects': subjects,
                 }
+            print(f"  -> ✅ 成功定位！在 {category} 中筛选出 {new_count} 篇纯新提交论文。")
         except Exception as e:
             print(f"抓取 {category} 时出错: {e}")
             
