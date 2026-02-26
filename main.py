@@ -121,8 +121,8 @@ Abstract: {paper['abstract']}
             # 如果是 429 限流或资源耗尽错误
             if "429" in error_msg or "503" in error_msg or "500" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
                 if attempt < max_retries - 1:
-                    print(f"    ⚠️ 触发 API 限流 (429)，暂停 90 秒后进行第 {attempt + 2} 次重试...")
-                    time.sleep(90) # 强制冷却 1.5 分钟
+                    print(f"    ⚠️ 触发 API 限流 (429)，暂停 60 秒后进行第 {attempt + 2} 次重试...")
+                    time.sleep(60) # 强制冷却 1 分钟
                 else:
                     return f"**[{paper['arxiv_id']}] {paper['title']}**\n* ❌ 总结失败：API 额度耗尽，请参考原文。\n"
             else:
@@ -238,10 +238,13 @@ def main():
         return
         
     print(f"成功筛选出 {len(papers)} 篇纯新提交论文 (New submissions)！")
-    print(f"开始逐篇深度总结，基础间隔设为 90 秒，预计耗时 {len(papers)*1.5} 分钟...")
+    print(f"开始逐篇深度总结，基础间隔设为 60 秒，预计耗时 {len(papers)} 分钟...")
     
     client = genai.Client(api_key=api_key)
-    MODEL_ID = 'gemini-2.5-flash'
+    
+    # 【核心修改区】：为 Map 和 Reduce 阶段分别指定最合适的模型
+    MAP_MODEL_ID = 'gemini-2.5-flash'         # 单篇翻译：速度快，免费额度高
+    REDUCE_MODEL_ID = 'gemini-3-pro-preview'  # 宏观总结：逻辑强，每天只调用 1 次
     
     detailed_summaries = []
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -249,21 +252,24 @@ def main():
     detailed_md += f"共收录 {len(papers)} 篇今日纯新提交 (New submissions) 论文。\n\n---\n\n"
     
     for i, paper in enumerate(papers):
-        print(f"[{i+1}/{len(papers)}] 正在处理: {paper['arxiv_id']}")
+        print(f"[{i+1}/{len(papers)}] 正在使用 {MAP_MODEL_ID} 处理: {paper['arxiv_id']}")
         
-        single_summary = summarize_single_paper(paper, client, MODEL_ID)
+        # 使用 Flash 模型进行单篇翻译提取
+        single_summary = summarize_single_paper(paper, client, MAP_MODEL_ID)
         detailed_summaries.append(single_summary)
         
         detailed_md += single_summary + "\n\n---\n\n"
         
-        # 【升级】所有正常请求之间也强制休眠 90 秒，彻底确保安全！
+        # 强制休眠 10 秒，确保单篇处理绝对安全
         if i < len(papers) - 1:
-            print("    ⏳ 等待 90 秒以防触发 API 速率限制...")
-            time.sleep(90) 
+            print("    ⏳ 等待 10 秒以防触发 API 速率限制...")
+            time.sleep(10) 
             
-    print("\n所有单篇处理完毕，正在生成宏观趋势概览...")
+    print(f"\n所有单篇处理完毕，正在调用强大的 {REDUCE_MODEL_ID} 生成宏观趋势概览...")
     all_text_for_reduce = "\n".join(detailed_summaries)
-    overall_summary = generate_overall_summary(all_text_for_reduce, client, MODEL_ID)
+    
+    # 仅在最后一步使用 Pro 模型进行全局汇总
+    overall_summary = generate_overall_summary(all_text_for_reduce, client, REDUCE_MODEL_ID)
     
     if overall_summary:
         print("宏观总结完毕，准备发送邮件...")
