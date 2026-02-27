@@ -4,7 +4,7 @@ name: Daily arXiv Astro-ph Summary
 on:
   schedule:
     # 每天 UTC 时间 02:00 执行（北京时间上午 10:00）
-    - cron: '0 2 * * *'
+    - cron: '45 2 * * *'
   workflow_dispatch: # 允许你在 GitHub 网页上点击按钮手动运行，方便测试
 
 jobs:
