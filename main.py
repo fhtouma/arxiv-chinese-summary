@@ -244,7 +244,7 @@ def main():
     
     # 【核心修改区】：为 Map 和 Reduce 阶段分别指定最合适的模型
     MAP_MODEL_ID = 'gemini-2.5-flash'         # 单篇翻译：速度快，免费额度高
-    REDUCE_MODEL_ID = 'gemini-3-pro-preview'  # 宏观总结：逻辑强，每天只调用 1 次
+    REDUCE_MODEL_ID = 'gemini-2.5-flash'  # 宏观总结：逻辑强，每天只调用 1 次
     
     detailed_summaries = []
     today_str = datetime.now().strftime("%Y-%m-%d")
