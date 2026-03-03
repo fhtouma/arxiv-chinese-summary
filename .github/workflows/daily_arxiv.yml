@@ -1,11 +1,13 @@
 name: Daily arXiv Astro-ph Summary
 
 # 触发条件
+# 触发条件
 on:
   schedule:
-    # 每天 UTC 时间 02:00 执行（北京时间上午 10:00）
-    - cron: '45 2 * * *'
-  workflow_dispatch: # 允许你在 GitHub 网页上点击按钮手动运行，方便测试
+    # 每天 UTC 时间 02:45 执行（北京时间上午 10:45）
+    # 星期字段设为 2-6，表示仅在周二到周六运行，完美避开 arXiv 的周末停更期
+    - cron: '45 2 * * 2-6'
+  workflow_dispatch: # 保留这个，方便你随时手动点击运行测试
 
 jobs:
   run-bot:
