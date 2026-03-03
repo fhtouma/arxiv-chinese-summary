@@ -153,9 +153,10 @@ def generate_overall_summary(all_detailed_summaries, client, model_id):
             return response.text
         except Exception as e:
             error_msg = str(e).lower()
-            if "429" in error_msg or "503" in error_msg or "500" in error_msg or "exhausted" in error_msg or "quota" in error_msg:
+            # 把 disconnected 和 timeout 也加进允许重试的名单
+            if "429" in error_msg or "503" in error_msg or "500" in error_msg or "exhausted" in error_msg or "quota" in error_msg or "disconnected" in error_msg or "timeout" in error_msg:
                 if attempt < max_retries - 1:
-                    print(f"⚠️ 宏观总结 API 限流或拥堵，暂停 90 秒后重试 ({attempt + 1}/{max_retries})...")
+                    print(f"    ⚠️ 宏观总结 API 限流或拥堵，暂停 90 秒后重试 ({attempt + 1}/{max_retries})...")
                     time.sleep(90)
                 else:
                     return "❌ 宏观总结生成失败：API 额度耗尽或持续拥堵。请查阅附件中的详细摘要。"
@@ -244,7 +245,7 @@ def main():
     
     # 【核心修改区】：为 Map 和 Reduce 阶段分别指定最合适的模型
     MAP_MODEL_ID = 'gemini-2.5-flash'         # 单篇翻译：速度快，免费额度高
-    REDUCE_MODEL_ID = 'gemini-2.5-flash'  # 宏观总结：逻辑强，每天只调用 1 次
+    REDUCE_MODEL_ID = 'gemini-3-pro-preview'  # 宏观总结：逻辑强，每天只调用 1 次
     
     detailed_summaries = []
     today_str = datetime.now().strftime("%Y-%m-%d")
